@@ -65,24 +65,83 @@ section[data-testid="stSidebar"] .stButton > button:hover {
 .trace-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 3px solid #22c55e; border-radius: 4px; padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: #15803d; margin: 6px 0; }
 .streamlit-expanderHeader { background: #fafaf9 !important; border: 1px solid #e8e4de !important; border-left: 3px solid #22c55e !important; color: #78716c !important; font-family: 'DM Mono', monospace !important; font-size: 0.68rem !important; }
 
-/* CHAT INPUT — white box, no red, neutral send button */
+/* CHAT INPUT — UPDATED ONLY as per your requirement:
+   - red outline for input
+   - red outline for button
+   - custom send icon (no emoji)
+*/
 .stChatInput { background: #f0ede8 !important; padding: 12px 32px !important; border-top: 1px solid #ddd8d0 !important; }
-.stChatInput textarea { background: #fff !important; border: 2px solid #ddd8d0 !important; border-radius: 6px !important; color: #1c1917 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.95rem !important; }
-.stChatInput textarea:focus { border-color: #ddd8d0 !important; box-shadow: none !important; }
-.stChatInput button { background: #1c1917 !important; border-radius: 6px !important; }
+
+.stChatInput textarea {
+    background: #fff !important;
+    border: 2px solid #ef4444 !important;  /* red outline */
+    border-radius: 6px !important;
+    color: #1c1917 !important;
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.95rem !important;
+}
+.stChatInput textarea:focus {
+    border-color: #ef4444 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* black send button + red outline */
+.stChatInput button {
+    background: #1c1917 !important;
+    border-radius: 6px !important;
+    border: 2px solid #ef4444 !important; /* red outline */
+    position: relative !important;
+}
+
+/* hide Streamlit default send icon */
+.stChatInput button svg { display: none !important; }
+
+/* NEW send icon: minimal arrow triangle (no emoji) */
+.stChatInput button::before {
+    content: "" !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    border-top: 8px solid transparent !important;
+    border-bottom: 8px solid transparent !important;
+    border-left: 14px solid #ffffff !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-40%, -50%) !important;
+}
+
 .stChatInput button:hover { background: #2c2825 !important; }
 
 hr { border-color: #2c2825 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-# SESSION STATE
+# ── SESSION STATE ──────────────────────────────────────────────────────────────
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "traces" not in st.session_state:
-    st.session_state.traces = []
+    st.session_state.traces = []  # list of lists: one list of trace-dicts per assistant reply
 
-# SIDEBAR
+
+def submit_query(query: str):
+    """Run agent and store message + traces atomically."""
+    st.session_state.messages.append({"role": "user", "content": query})
+    history = [
+        {"role": m["role"], "content": m["content"]}
+        for m in st.session_state.messages[:-1]
+    ]
+    try:
+        response_text, trace_list = run_agent(query, history)
+        st.session_state.messages.append({"role": "assistant", "content": response_text})
+        # trace_list is already a list of trace dicts from agent.py
+        st.session_state.traces.append(trace_list if trace_list else [])
+    except Exception as e:
+        st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {str(e)}"})
+        st.session_state.traces.append([])
+
+
+# ── SIDEBAR ───────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown('<div class="sb-logo"><span class="sb-logo-dot"></span> BI Agent</div>', unsafe_allow_html=True)
     st.markdown('<div class="sb-tagline">monday.com intelligence</div>', unsafe_allow_html=True)
@@ -108,16 +167,8 @@ with st.sidebar:
     ]
     for q in queries:
         if st.button(q, key=f"sq_{q}", use_container_width=True):
-            st.session_state.messages.append({"role": "user", "content": q})
             with st.spinner("Fetching live data..."):
-                try:
-                    history = [{"role": "assistant" if m["role"] == "assistant" else "user", "content": m["content"]} for m in st.session_state.messages[:-1]]
-                    response_text, traces = run_agent(q, history)
-                    st.session_state.messages.append({"role": "assistant", "content": response_text})
-                    st.session_state.traces.append(traces)
-                except Exception as e:
-                    st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {str(e)}"})
-                    st.session_state.traces.append([])
+                submit_query(q)
             st.rerun()
 
     st.markdown("---")
@@ -126,7 +177,7 @@ with st.sidebar:
         st.session_state.traces = []
         st.rerun()
 
-# TOP BAR
+# ── TOP BAR ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="top-bar">
     <div class="top-bar-left">Business Intelligence Platform</div>
@@ -140,7 +191,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# HERO
+# ── HERO ──────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero">
     <div class="hero-title">Ask your data <span>anything.</span></div>
@@ -148,7 +199,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# CHAT MESSAGES
+# ── CHAT MESSAGES ─────────────────────────────────────────────────────────────
 st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
 
 if not st.session_state.messages:
@@ -159,41 +210,49 @@ if not st.session_state.messages:
     </div>
     """, unsafe_allow_html=True)
 
-# ── TRACE FIX: track assistant index separately ────────────────────────────────
-assistant_count = 0
-for i, msg in enumerate(st.session_state.messages):
+# Build parallel lists: one entry per assistant reply
+trace_idx = 0
+for msg in st.session_state.messages:
     if msg["role"] == "user":
-        st.markdown(f'<div class="msg-user-label">You</div><div class="msg-user">{msg["content"]}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="msg-user-label">You</div>'
+            f'<div class="msg-user">{msg["content"]}</div>',
+            unsafe_allow_html=True,
+        )
     else:
-        st.markdown(f'<div class="msg-agent-label">● BI Agent</div><div class="msg-agent">{msg["content"]}</div>', unsafe_allow_html=True)
-        if assistant_count < len(st.session_state.traces) and st.session_state.traces[assistant_count]:
-            with st.expander(f"🔬 {len(st.session_state.traces[assistant_count])} live API call(s)"):
-                for trace in st.session_state.traces[assistant_count]:
-                    params_str = ", ".join(f"{k}={v}" for k, v in trace.get("params", {}).items() if v) or "no filters"
-                    error_html = f'<br><span style="color:#ef4444;">⚠ {trace["error"]}</span>' if trace.get("error") else ""
-                    st.markdown(f"""
-                    <div class="trace-card">
-                        <span style="font-weight:600;">▶ {trace.get('tool','unknown')}</span>({params_str})<br>
-                        board    : {trace.get('board','N/A')}<br>
-                        returned : {trace.get('records_returned',0)} records{error_html}
-                    </div>
-                    """, unsafe_allow_html=True)
-        assistant_count += 1
+        st.markdown(
+            f'<div class="msg-agent-label">● BI Agent</div>'
+            f'<div class="msg-agent">{msg["content"]}</div>',
+            unsafe_allow_html=True,
+        )
+        # Show trace for this assistant reply
+        if trace_idx < len(st.session_state.traces):
+            trace_list = st.session_state.traces[trace_idx]
+            if trace_list:
+                with st.expander(f"🔬 {len(trace_list)} live API call(s)"):
+                    for trace in trace_list:
+                        params_str = (
+                            ", ".join(f"{k}={v}" for k, v in trace.get("params", {}).items() if v)
+                            or "no filters"
+                        )
+                        error_html = (
+                            f'<br><span style="color:#ef4444;">⚠ {trace["error"]}</span>'
+                            if trace.get("error") else ""
+                        )
+                        st.markdown(f"""
+                        <div class="trace-card">
+                            <span style="font-weight:600;">▶ {trace.get('tool','unknown')}</span>({params_str})<br>
+                            board    : {trace.get('board','N/A')}<br>
+                            returned : {trace.get('records_returned',0)} records{error_html}
+                        </div>
+                        """, unsafe_allow_html=True)
+        trace_idx += 1
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# CHAT INPUT — Enter key, auto-clear, sticks to bottom
+# ── CHAT INPUT ────────────────────────────────────────────────────────────────
 user_input = st.chat_input("Ask a business question...")
-
 if user_input and user_input.strip():
-    st.session_state.messages.append({"role": "user", "content": user_input})
     with st.spinner("⚡ Fetching live data from monday.com..."):
-        try:
-            history = [{"role": "assistant" if m["role"] == "assistant" else "user", "content": m["content"]} for m in st.session_state.messages[:-1]]
-            response_text, traces = run_agent(user_input, history)
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
-            st.session_state.traces.append(traces)
-        except Exception as e:
-            st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {str(e)}"})
-            st.session_state.traces.append([])
+        submit_query(user_input)
     st.rerun()
