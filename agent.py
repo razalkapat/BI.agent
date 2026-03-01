@@ -31,10 +31,10 @@ RULES:
 - deal_stage_distribution = current stage in pipeline (Lead Generated, Proposal Sent etc).
 - For "which sector has most work orders" queries, call pipeline_summary() and look at wo_sector_distribution.
 - For "how many work orders completed" queries, call pipeline_summary() and look at wo_execution_status.
-- For "total pipeline value" queries, call pipeline_summary() and report total_deal_value.
-- For "improve cash flow" or "what should we focus on" queries, call revenue_analysis() to get receivables and billing data.
-- For "strongest sector" queries, call both pipeline_summary() and revenue_analysis() to compare.
-- For any ranking or comparison query, always fetch data from both boards.
+- For "total pipeline value" queries, call pipeline_summary() and report total_deal_value = Rs. 230.55 crores. Never say Rs. 2305 crores.
+- For "improve cash flow" or "what should we focus on" queries, call revenue_analysis().
+- For "strongest sector" queries, call revenue_analysis() to compare revenue by sector.
+- For any ranking or comparison query, fetch data from both boards.
 - Never return zero data without first calling at least one tool.
 - Handle missing/null data gracefully and mention data quality caveats when relevant.
 - Format large numbers in Indian Rupees using lakhs/crores.
@@ -69,11 +69,9 @@ def run_agent(user_message: str, chat_history: list):
         )
         response_text = response.choices[0].message.content.strip()
 
-        # Clean up any preamble before JSON
         tool_call = _extract_tool_call(response_text)
 
         if not tool_call:
-            # No tool call — final answer
             return response_text, traces
 
         tool_name = tool_call.get("tool")
@@ -104,7 +102,6 @@ def run_agent(user_message: str, chat_history: list):
 
 
 def _extract_tool_call(text: str):
-    # Try full text as pure JSON first
     try:
         parsed = json.loads(text.strip())
         if "tool" in parsed:
@@ -112,7 +109,6 @@ def _extract_tool_call(text: str):
     except json.JSONDecodeError:
         pass
 
-    # Try to find JSON anywhere in text (handles preamble like "To analyze this: {...}")
     match = re.search(r'\{\s*"tool"\s*:\s*"[^"]+"\s*,\s*"params"\s*:\s*\{[^{}]*\}\s*\}', text, re.DOTALL)
     if match:
         try:

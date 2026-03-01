@@ -17,6 +17,7 @@ def fetch_deals() -> list:
                 text = None
             row[title] = text
         result.append(row)
+    # Remove header rows
     result = [r for r in result if r.get("name") not in ["Deal Name", "name", None]]
     return result
 
@@ -36,10 +37,12 @@ def fetch_work_orders() -> list:
                 text = None
             row[title] = text
         result.append(row)
+    # Remove header rows
     result = [r for r in result if r.get("name") not in ["Deal name masked", "name", None]]
     return result
 
 
+# ─── TOOL 1: GET WORK ORDERS ──────────────────────────────────────────────────
 def tool_get_work_orders(sector=None, status=None):
     trace = {
         "tool": "get_work_orders",
@@ -47,14 +50,17 @@ def tool_get_work_orders(sector=None, status=None):
         "board": f"Work Orders (ID: {WORK_ORDERS_BOARD_ID})"
     }
     data = fetch_work_orders()
+
     if sector:
         data = [d for d in data if d.get("Sector") and sector.lower() in str(d["Sector"]).lower()]
     if status:
         data = [d for d in data if d.get("Execution Status") and status.lower() in str(d["Execution Status"]).lower()]
+
     trace["records_returned"] = len(data)
     return {"data": data, "trace": trace}
 
 
+# ─── TOOL 2: GET DEALS ────────────────────────────────────────────────────────
 def tool_get_deals(sector=None, stage=None, status=None):
     trace = {
         "tool": "get_deals",
@@ -62,18 +68,26 @@ def tool_get_deals(sector=None, stage=None, status=None):
         "board": f"Deals (ID: {DEALS_BOARD_ID})"
     }
     data = fetch_deals()
+
     if sector:
         data = [d for d in data if d.get("Sector/service") and sector.lower() in str(d["Sector/service"]).lower()]
     if stage:
         data = [d for d in data if d.get("Deal Stage") and stage.lower() in str(d["Deal Stage"]).lower()]
     if status:
         data = [d for d in data if d.get("Deal Status") and status.lower() in str(d["Deal Status"]).lower()]
+
     trace["records_returned"] = len(data)
     return {"data": data, "trace": trace}
 
 
+# ─── TOOL 3: PIPELINE SUMMARY ─────────────────────────────────────────────────
 def tool_pipeline_summary():
-    trace = {"tool": "pipeline_summary", "params": {}, "board": "Both boards"}
+    trace = {
+        "tool": "pipeline_summary",
+        "params": {},
+        "board": "Both boards"
+    }
+
     deals = fetch_deals()
     work_orders = fetch_work_orders()
 
@@ -99,6 +113,10 @@ def tool_pipeline_summary():
         es = wo.get("Execution Status") or "Unknown"
         exec_status_counts[es] = exec_status_counts.get(es, 0) + 1
 
+    total_billed = sum(safe_float(wo.get("Billed Value Incl GST")) for wo in work_orders)
+    total_receivable = sum(safe_float(wo.get("Amount Receivable")) for wo in work_orders)
+    total_collected = sum(safe_float(wo.get("Collected Amount")) for wo in work_orders)
+
     summary = {
         "total_deals": len(deals),
         "open_deals": open_deals,
@@ -108,18 +126,26 @@ def tool_pipeline_summary():
         "total_work_orders": len(work_orders),
         "wo_sector_distribution": sector_counts,
         "wo_execution_status": exec_status_counts,
-        "total_billed_value": sum(safe_float(wo.get("Billed Value Incl GST")) for wo in work_orders),
-        "total_collected": sum(safe_float(wo.get("Collected Amount")) for wo in work_orders),
-        "total_receivable": sum(safe_float(wo.get("Amount Receivable")) for wo in work_orders),
+        "total_billed_value": total_billed,
+        "total_collected": total_collected,
+        "total_receivable": total_receivable,
     }
+
     trace["records_returned"] = len(deals) + len(work_orders)
     return {"data": summary, "trace": trace}
 
 
+# ─── TOOL 4: SECTOR ANALYSIS ──────────────────────────────────────────────────
 def tool_sector_analysis(sector):
-    trace = {"tool": "sector_analysis", "params": {"sector": sector}, "board": "Both boards"}
+    trace = {
+        "tool": "sector_analysis",
+        "params": {"sector": sector},
+        "board": "Both boards"
+    }
+
     all_deals = fetch_deals()
     deals = [d for d in all_deals if d.get("Sector/service") and sector.lower() in str(d["Sector/service"]).lower()]
+
     all_wo = fetch_work_orders()
     work_orders = [d for d in all_wo if d.get("Sector") and sector.lower() in str(d["Sector"]).lower()]
 
@@ -150,16 +176,26 @@ def tool_sector_analysis(sector):
         "total_collected": sum(safe_float(wo.get("Collected Amount")) for wo in work_orders),
         "wo_status_breakdown": wo_statuses,
     }
+
     trace["records_returned"] = len(deals) + len(work_orders)
     return {"data": analysis, "trace": trace}
 
 
+# ─── TOOL 5: REVENUE ANALYSIS ─────────────────────────────────────────────────
 def tool_revenue_analysis():
-    trace = {"tool": "revenue_analysis", "params": {}, "board": "Work Orders board"}
+    trace = {
+        "tool": "revenue_analysis",
+        "params": {},
+        "board": "Work Orders board"
+    }
+
     work_orders = fetch_work_orders()
 
+    total_amount = sum(safe_float(wo.get("Amount Incl GST")) for wo in work_orders)
     total_billed = sum(safe_float(wo.get("Billed Value Incl GST")) for wo in work_orders)
     total_collected = sum(safe_float(wo.get("Collected Amount")) for wo in work_orders)
+    total_receivable = sum(safe_float(wo.get("Amount Receivable")) for wo in work_orders)
+    total_unbilled = sum(safe_float(wo.get("Amount to Bill Incl GST")) for wo in work_orders)
 
     billing_status = {}
     sector_revenue = {}
@@ -177,21 +213,23 @@ def tool_revenue_analysis():
         wo_status_counts[s] = wo_status_counts.get(s, 0) + 1
 
     analysis = {
-        "total_contract_value": sum(safe_float(wo.get("Amount Incl GST")) for wo in work_orders),
+        "total_contract_value": total_amount,
         "total_billed": total_billed,
         "total_collected": total_collected,
-        "total_receivable": sum(safe_float(wo.get("Amount Receivable")) for wo in work_orders),
-        "total_unbilled": sum(safe_float(wo.get("Amount to Bill Incl GST")) for wo in work_orders),
+        "total_receivable": total_receivable,
+        "total_unbilled": total_unbilled,
         "collection_rate_pct": round((total_collected / total_billed * 100) if total_billed > 0 else 0, 1),
         "billing_status_breakdown": billing_status,
         "revenue_by_sector": sector_revenue,
         "execution_status_breakdown": wo_status_counts,
         "total_work_orders": len(work_orders),
     }
+
     trace["records_returned"] = len(work_orders)
     return {"data": analysis, "trace": trace}
 
 
+# ─── TOOL REGISTRY ────────────────────────────────────────────────────────────
 TOOLS = {
     "get_work_orders": tool_get_work_orders,
     "get_deals": tool_get_deals,
@@ -205,10 +243,12 @@ You have access to these tools. Call them by responding ONLY with JSON like:
 {"tool": "tool_name", "params": {"key": "value"}}
 
 1. get_work_orders(sector=None, status=None)
+   - Fetch work orders, filter by sector or execution status
    - Known sectors: Mining, Powerline, Renewables, Railways, Tender, DSP
    - Known statuses: Completed, Not Started, Ongoing, Executed until current month
 
 2. get_deals(sector=None, stage=None, status=None)
+   - Fetch deals, filter by sector, stage, or status
    - Known stages: Sales Qualified Leads, Proposal/Commercials Sent, Feasibility,
      Work Order Received, Negotiations, Demo Done, Lead Generated,
      Project Won, Project Lost, Projects On Hold
@@ -216,6 +256,7 @@ You have access to these tools. Call them by responding ONLY with JSON like:
 
 3. pipeline_summary()
    - Full overview of entire pipeline across both boards
+   - Use for general business health questions
 
 4. sector_analysis(sector)
    - Deep dive into one specific sector
