@@ -3,7 +3,7 @@
 A production-ready AI agent that answers founder-level business intelligence queries using live data from monday.com.
 
 ## Live Demo
-[[[https://biagent.streamlit.app](https://biagent-biagent.streamlit.app/
+https://biagent-biagent.streamlit.app/
 
 ## GitHub
 [github.com/razalkapat/BI.agent](https://github.com/razalkapat/BI.agent)
