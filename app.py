@@ -16,6 +16,7 @@ footer {visibility: hidden;}
 html, body, [class*="css"] { font-family: 'DM Sans', sans-serif; background: #f0ede8; color: #1c1917; }
 .stApp { background: #f0ede8; }
 
+/* SIDEBAR */
 section[data-testid="stSidebar"] { background: #1c1917; }
 section[data-testid="stSidebar"] .stButton > button {
     background: transparent !important; color: #57534e !important;
@@ -35,6 +36,7 @@ section[data-testid="stSidebar"] .stButton > button:hover {
 .source-dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; display: inline-block; animation: blink 3s infinite; }
 @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
 
+/* TOP BAR */
 .top-bar { background: #1c1917; padding: 0 32px; height: 52px; display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #ef4444; }
 .top-bar-left { font-family: 'Syne', sans-serif; font-size: 0.72rem; font-weight: 600; color: #57534e; letter-spacing: 3px; text-transform: uppercase; }
 .top-bar-right { display: flex; align-items: center; gap: 20px; }
@@ -42,11 +44,13 @@ section[data-testid="stSidebar"] .stButton > button:hover {
 .top-bar-live { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 0.68rem; color: #22c55e; letter-spacing: 1px; }
 .live-dot { width: 6px; height: 6px; background: #22c55e; border-radius: 50%; animation: blink 1.5s infinite; display: inline-block; }
 
+/* HERO */
 .hero { padding: 28px 32px 20px; background: #f0ede8; border-bottom: 1px solid #ddd8d0; }
 .hero-title { font-family: 'Syne', sans-serif; font-size: 2.4rem; font-weight: 800; color: #1c1917; line-height: 0.95; letter-spacing: -2px; margin-bottom: 8px; }
 .hero-title span { color: #ef4444; }
 .hero-desc { font-size: 0.8rem; color: #78716c; line-height: 1.6; }
 
+/* CHAT MESSAGES */
 .chat-wrap { padding: 20px 32px 8px; }
 .msg-user-label { font-family: 'DM Mono', monospace; font-size: 0.58rem; color: #a8a29e; letter-spacing: 1.5px; text-transform: uppercase; text-align: right; margin-bottom: 5px; }
 .msg-user { background: #1c1917; color: #f0ede8; border-radius: 16px 16px 4px 16px; padding: 12px 18px; margin: 0 0 20px 25%; font-size: 0.9rem; line-height: 1.6; }
@@ -57,8 +61,18 @@ section[data-testid="stSidebar"] .stButton > button:hover {
 .empty-big { font-family: 'Syne', sans-serif; font-size: 3.5rem; font-weight: 800; color: #e8e4de; letter-spacing: -3px; line-height: 1; margin-bottom: 10px; }
 .empty-sub { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: #c4bdb5; letter-spacing: 1.5px; text-transform: uppercase; }
 
+/* TRACE */
 .trace-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 3px solid #22c55e; border-radius: 4px; padding: 10px 14px; font-family: 'DM Mono', monospace; font-size: 0.7rem; color: #15803d; margin: 6px 0; }
 .streamlit-expanderHeader { background: #fafaf9 !important; border: 1px solid #e8e4de !important; border-left: 3px solid #22c55e !important; color: #78716c !important; font-family: 'DM Mono', monospace !important; font-size: 0.68rem !important; }
+
+/* CHAT INPUT — white box, no red, neutral send button */
+.stChatInput { background: #f0ede8 !important; padding: 12px 32px !important; border-top: 1px solid #ddd8d0 !important; }
+.stChatInput textarea { background: #fff !important; border: 2px solid #ddd8d0 !important; border-radius: 6px !important; color: #1c1917 !important; font-family: 'DM Sans', sans-serif !important; font-size: 0.95rem !important; }
+.stChatInput textarea:focus { border-color: #ddd8d0 !important; box-shadow: none !important; }
+.stChatInput button { background: #1c1917 !important; border-radius: 6px !important; }
+.stChatInput button:hover { background: #2c2825 !important; }
+
+hr { border-color: #2c2825 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -67,21 +81,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "traces" not in st.session_state:
     st.session_state.traces = []
-
-
-def handle_query(query):
-    st.session_state.messages.append({"role": "user", "content": query})
-    with st.spinner("Fetching live data..."):
-        try:
-            history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[:-1]]
-            response_text, traces = run_agent(query, history)
-            st.session_state.messages.append({"role": "assistant", "content": response_text})
-            st.session_state.traces.append(traces)
-        except Exception as e:
-            st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {str(e)}"})
-            st.session_state.traces.append([])
-    st.rerun()
-
 
 # SIDEBAR
 with st.sidebar:
@@ -109,7 +108,17 @@ with st.sidebar:
     ]
     for q in queries:
         if st.button(q, key=f"sq_{q}", use_container_width=True):
-            handle_query(q)
+            st.session_state.messages.append({"role": "user", "content": q})
+            with st.spinner("Fetching live data..."):
+                try:
+                    history = [{"role": "assistant" if m["role"] == "assistant" else "user", "content": m["content"]} for m in st.session_state.messages[:-1]]
+                    response_text, traces = run_agent(q, history)
+                    st.session_state.messages.append({"role": "assistant", "content": response_text})
+                    st.session_state.traces.append(traces)
+                except Exception as e:
+                    st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {str(e)}"})
+                    st.session_state.traces.append([])
+            st.rerun()
 
     st.markdown("---")
     if st.button("🗑️ Clear", use_container_width=True):
@@ -135,11 +144,11 @@ st.markdown("""
 st.markdown("""
 <div class="hero">
     <div class="hero-title">Ask your data <span>anything.</span></div>
-    <div class="hero-desc">Live business intelligence powered by monday.com. Every query fetches fresh data — no caching, no delays.</div>
+    <div class="hero-desc">Live business intelligence · monday.com · No caching · Every query is fresh</div>
 </div>
 """, unsafe_allow_html=True)
 
-# CHAT
+# CHAT MESSAGES
 st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
 
 if not st.session_state.messages:
@@ -150,14 +159,13 @@ if not st.session_state.messages:
     </div>
     """, unsafe_allow_html=True)
 
-# Track assistant message index separately for correct trace mapping
+# ── TRACE FIX: track assistant index separately ────────────────────────────────
 assistant_count = 0
 for i, msg in enumerate(st.session_state.messages):
     if msg["role"] == "user":
         st.markdown(f'<div class="msg-user-label">You</div><div class="msg-user">{msg["content"]}</div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="msg-agent-label">● BI Agent</div><div class="msg-agent">{msg["content"]}</div>', unsafe_allow_html=True)
-        # Show trace immediately with the correct assistant index
         if assistant_count < len(st.session_state.traces) and st.session_state.traces[assistant_count]:
             with st.expander(f"🔬 {len(st.session_state.traces[assistant_count])} live API call(s)"):
                 for trace in st.session_state.traces[assistant_count]:
@@ -174,7 +182,18 @@ for i, msg in enumerate(st.session_state.messages):
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# CHAT INPUT
+# CHAT INPUT — Enter key, auto-clear, sticks to bottom
 user_input = st.chat_input("Ask a business question...")
+
 if user_input and user_input.strip():
-    handle_query(user_input)
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.spinner("⚡ Fetching live data from monday.com..."):
+        try:
+            history = [{"role": "assistant" if m["role"] == "assistant" else "user", "content": m["content"]} for m in st.session_state.messages[:-1]]
+            response_text, traces = run_agent(user_input, history)
+            st.session_state.messages.append({"role": "assistant", "content": response_text})
+            st.session_state.traces.append(traces)
+        except Exception as e:
+            st.session_state.messages.append({"role": "assistant", "content": f"⚠️ Error: {str(e)}"})
+            st.session_state.traces.append([])
+    st.rerun()
